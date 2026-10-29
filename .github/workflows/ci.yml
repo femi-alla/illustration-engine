@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Lint, type-check, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: python -m pip install --upgrade pip && pip install -e ".[dev]"
+
+      - name: Ruff (format + lint)
+        run: |
+          ruff format --check .
+          ruff check --output-format=github .
+
+      - name: Mypy (strict)
+        run: mypy
+
+      - name: Pytest with coverage gate
+        run: pytest
+
+      - name: Bandit (SAST)
+        run: bandit -q -r src -c pyproject.toml
+
+      - name: pip-audit (known-vulnerable dependencies)
+        run: pip-audit --strict --progress-spinner off
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          retention-days: 7
+
+  container:
+    name: Build and scan image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image (not pushed)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: illustration-engine:ci
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test the container
+        run: |
+          docker run -d --name app -p 8080:8080 illustration-engine:ci
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8080/readyz; then echo; break; fi
+            sleep 1
+          done
+          curl -fsS -X POST http://127.0.0.1:8080/v1/illustrations \
+            -H 'content-type: application/json' \
+            -d @examples/fixed-level.json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("rows:", len(d["scenarios"]["current"]["rows"]))'
+          docker logs app | tail -5
+          docker rm -f app
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: illustration-engine:ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+  terraform:
+    name: Terraform fmt, validate, scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "<1.16.0"
+
+      - name: Format check
+        run: terraform fmt -check -recursive infra
+
+      - name: Validate bootstrap
+        working-directory: infra/bootstrap
+        run: terraform init -backend=false -input=false && terraform validate
+
+      - name: Validate live
+        working-directory: infra/live
+        run: terraform init -backend=false -input=false && terraform validate
+
+      - name: Trivy IaC scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: infra
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+          trivyignores: .trivyignore

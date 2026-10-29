@@ -1,0 +1,21 @@
+# Accepted findings for this demo, each with a reason. See README "Trade-offs".
+# ALB listens on plain HTTP: no domain or certificate for a throwaway demo.
+AVD-AWS-0054
+# ALB security group allows ingress from 0.0.0.0/0: it is a public demo endpoint.
+AVD-AWS-0107
+# Fargate tasks have public IPs to avoid NAT gateway cost; the task SG only admits the ALB.
+AVD-AWS-0164
+# Load balancer is intentionally internet-facing.
+AVD-AWS-0053
+# CloudWatch log group uses the default AWS-managed encryption.
+AVD-AWS-0017
+# SNS topic uses default encryption for alarm notifications (no sensitive payload).
+AVD-AWS-0095
+# ECR uses AES256 (AWS-managed) rather than a customer-managed KMS key.
+AVD-AWS-0033
+# S3 state bucket uses AES256 (AWS-managed) rather than a customer-managed KMS key.
+AVD-AWS-0132
+# S3 access logging is not configured for the single state bucket in this demo.
+AVD-AWS-0089
+# ECS task definition uses plain environment variables (no secrets are passed).
+AVD-AWS-0036

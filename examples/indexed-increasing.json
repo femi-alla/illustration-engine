@@ -1,0 +1,16 @@
+{
+  "issue_age": 45,
+  "face_amount": 500000,
+  "annual_premium": 12000,
+  "premium_years": 20,
+  "projection_years": 40,
+  "death_benefit_option": "increasing",
+  "risk_class": "preferred",
+  "crediting": {
+    "kind": "indexed",
+    "current_rate": 0.07,
+    "cap": 0.09,
+    "floor": 0.0,
+    "participation": 1.0
+  }
+}

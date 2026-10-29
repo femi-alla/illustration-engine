@@ -1,0 +1,171 @@
+name: Deploy
+
+# Pull requests get a Terraform plan posted as a comment. Pushes to main run the
+# full CI workflow, build and push the image, apply Terraform and smoke-test the
+# live URL. AWS access is through GitHub's OIDC provider: no stored keys.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  pull_request:
+    paths:
+      - "infra/live/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "0"
+
+jobs:
+  ci:
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/ci.yml
+
+  plan:
+    name: Terraform plan (PR)
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.AWS_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "<1.16.0"
+
+      - name: Init
+        working-directory: infra/live
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="region=${{ vars.AWS_REGION }}"
+
+      - name: Plan
+        id: plan
+        working-directory: infra/live
+        run: |
+          IMAGE_TAG=$(aws ecr describe-images --repository-name illustration-engine \
+            --query 'sort_by(imageDetails,&imagePushedAt)[-1].imageTags[0]' --output text 2>/dev/null || echo "none")
+          terraform plan -no-color -var "image_tag=${IMAGE_TAG}" -out=tfplan | tee plan.txt
+          echo "exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Comment plan on the pull request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('infra/live/plan.txt', 'utf8').slice(-60000);
+            const body = `#### Terraform plan for \`infra/live\`\n<details><summary>Show plan</summary>\n\n\`\`\`terraform\n${plan}\n\`\`\`\n</details>`;
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+  deploy:
+    name: Build, push, apply, smoke test
+    # Skipped until the repository variables from the bootstrap stack are set, so forks
+    # and fresh clones get a green CI run without an AWS account.
+    if: github.event_name != 'pull_request' && vars.AWS_ROLE_ARN != ''
+    needs: [ci]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.outputs.outputs.service_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/illustration-engine:${{ github.sha }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp || github.run_started_at }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "<1.16.0"
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: infra/live
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="region=${{ vars.AWS_REGION }}"
+
+      - name: Terraform apply
+        working-directory: infra/live
+        run: terraform apply -auto-approve -var "image_tag=${{ github.sha }}"
+
+      - name: Read outputs
+        id: outputs
+        working-directory: infra/live
+        run: |
+          echo "service_url=$(terraform output -raw service_url)" >> "$GITHUB_OUTPUT"
+          echo "dashboard_url=$(terraform output -raw dashboard_url)" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for the service to become stable
+        run: |
+          aws ecs wait services-stable --cluster illustration-engine --services illustration-engine
+
+      - name: Smoke test the live URL
+        env:
+          URL: ${{ steps.outputs.outputs.service_url }}
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS "$URL/readyz"; then echo; break; fi
+            echo "waiting for load balancer ($i)"; sleep 10
+          done
+          curl -fsS "$URL/version"
+          echo
+          curl -fsS "$URL/version" | grep -q "${{ github.sha }}"
+          curl -fsS -X POST "$URL/v1/illustrations" -H 'content-type: application/json' \
+            -d @examples/indexed-increasing.json | head -c 400
+          echo
+
+      - name: Job summary
+        run: |
+          {
+            echo "## Deployed \`${{ github.sha }}\`"
+            echo
+            echo "- Service: ${{ steps.outputs.outputs.service_url }}"
+            echo "- API docs: ${{ steps.outputs.outputs.service_url }}/docs"
+            echo "- Dashboard: ${{ steps.outputs.outputs.dashboard_url }}"
+          } >> "$GITHUB_STEP_SUMMARY"

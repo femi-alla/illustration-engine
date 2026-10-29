@@ -1,0 +1,13 @@
+{
+  "issue_age": 35,
+  "face_amount": 250000,
+  "annual_premium": 3600,
+  "projection_years": 30,
+  "death_benefit_option": "level",
+  "risk_class": "standard",
+  "crediting": {
+    "kind": "fixed",
+    "current_rate": 0.05,
+    "guaranteed_rate": 0.02
+  }
+}
