@@ -8,7 +8,10 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip \
-    && /opt/venv/bin/pip install .
+    && /opt/venv/bin/pip install . \
+    # The runtime never installs anything, so drop the installers (and their vendored
+    # libraries, which image scanners otherwise flag) from the virtualenv.
+    && /opt/venv/bin/pip uninstall -y pip setuptools wheel
 
 FROM python:3.12-slim AS runtime
 ARG GIT_SHA=unknown
@@ -26,7 +29,8 @@ ENV PATH="/opt/venv/bin:$PATH" \
     BUILD_TIME=${BUILD_TIME} \
     PORT=8080
 
-RUN groupadd --system app && useradd --system --gid app --uid 10001 --home /app app
+RUN groupadd --system app && useradd --system --gid app --uid 10001 --home /app app \
+    && python -m pip uninstall -y pip setuptools
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 USER app

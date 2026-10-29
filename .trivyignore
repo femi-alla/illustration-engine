@@ -5,6 +5,9 @@ AVD-AWS-0054
 AVD-AWS-0107
 # Fargate tasks have public IPs to avoid NAT gateway cost; the task SG only admits the ALB.
 AVD-AWS-0164
+# Task security group egress on 443 to any IP: tasks pull from ECR and ship logs to
+# CloudWatch over the public endpoints because there are no VPC endpoints or NAT.
+AVD-AWS-0104
 # Load balancer is intentionally internet-facing.
 AVD-AWS-0053
 # CloudWatch log group uses the default AWS-managed encryption.
