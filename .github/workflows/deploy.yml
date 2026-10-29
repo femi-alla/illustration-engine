@@ -47,7 +47,7 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "<1.16.0"
 
@@ -118,7 +118,7 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "<1.16.0"
           terraform_wrapper: false
