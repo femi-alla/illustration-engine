@@ -1,0 +1,12 @@
+status Complete rows 10
+timestamp                    method route                status       ms
+2026-10-29 02:23:30.265      POST   /v1/illustrations    200       159.0
+2026-10-29 02:21:15.583      GET    unmatched            200      105.94
+2026-10-29 02:26:00.566      POST   /v1/illustrations    200       97.81
+2026-10-29 02:26:00.665      GET    /healthz             200       83.22
+2026-10-29 02:24:30.465      GET    /healthz             200       81.05
+2026-10-29 02:23:29.265      GET    /v1/assumptions      200       80.27
+2026-10-29 02:19:00.465      GET    /healthz             200       78.72
+2026-10-29 02:20:00.365      GET    /healthz             200       78.03
+2026-10-29 02:21:29.467      POST   /v1/illustrations    200       77.58
+2026-10-29 02:24:59.774      POST   /v1/illustrations    200       77.29

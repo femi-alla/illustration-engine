@@ -37,7 +37,7 @@ jobs:
 
   plan:
     name: Terraform plan (PR)
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.AWS_ROLE_ARN != ''
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -83,9 +83,9 @@ jobs:
 
   deploy:
     name: Build, push, apply, smoke test
-    # Skipped until the repository variables from the bootstrap stack are set, so forks
-    # and fresh clones get a green CI run without an AWS account.
-    if: github.event_name != 'pull_request' && vars.AWS_ROLE_ARN != ''
+    # Runs only when DEPLOY_ENABLED is "true", so forks and fresh clones get a green CI
+    # run without an AWS account, and the demo can be parked after teardown.
+    if: github.event_name != 'pull_request' && vars.DEPLOY_ENABLED == 'true'
     needs: [ci]
     runs-on: ubuntu-latest
     environment:

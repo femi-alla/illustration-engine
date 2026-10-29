@@ -150,8 +150,10 @@ Two Terraform stacks, split by lifecycle:
 | `infra/bootstrap` | A person, once | S3 state bucket (versioned, encrypted, native locking), ECR repository (immutable tags, scan on push, keep last 10), GitHub OIDC provider and the IAM deploy role with a service-scoped policy. |
 | `infra/live` | GitHub Actions on every push to `main` | VPC with two public subnets, security groups, ALB + target group with `/healthz` checks, ECS cluster (Container Insights) and Fargate service, task execution and task roles, CPU target-tracking autoscaling (1–3 tasks), deployment circuit breaker with rollback, CloudWatch log group, dashboard, four alarms and an SNS topic. |
 
-The deploy role's trust policy only accepts tokens from this repository's `main` branch,
-pull requests and environments, so a fork cannot assume it.
+The deploy role's trust policy only accepts tokens whose subject carries this
+repository's immutable owner and repository ids (`repo:owner@id/name@id:...`, the form
+GitHub now issues) for the `main` branch, pull requests and environments, so neither a
+fork nor a renamed or re-created repository can assume it.
 
 ### Trade-offs made on purpose
 
@@ -185,12 +187,15 @@ Dependabot watches pip, GitHub Actions, Docker and Terraform providers weekly.
 
 ### Setting up a copy
 
-1. `cd infra/bootstrap && terraform init && terraform apply` using any AWS credentials
+1. Look up your ids: `gh api users/<owner> --jq .id` and `gh api repos/<owner>/<name> --jq .id`,
+   and set them with `github_repository` in `infra/bootstrap/variables.tf`.
+2. `cd infra/bootstrap && terraform init && terraform apply` using any AWS credentials
    with permission to create the bootstrap resources.
-2. Set three repository variables from the outputs: `AWS_ROLE_ARN`, `AWS_REGION` and
-   `TF_STATE_BUCKET`.
-3. Push to `main`. The first deploy takes about five minutes, most of it the load
-   balancer provisioning.
+3. Set four repository variables: `AWS_ROLE_ARN`, `AWS_REGION` and `TF_STATE_BUCKET`
+   from the outputs, and `DEPLOY_ENABLED=true`.
+4. Push to `main`. The first deploy takes about five minutes, most of it the load
+   balancer provisioning. Set `DEPLOY_ENABLED` to anything else to park the project:
+   CI keeps running, deploys are skipped.
 
 ---
 
@@ -210,9 +215,9 @@ Dependabot watches pip, GitHub Actions, Docker and Terraform providers weekly.
 
 ## Deployment record
 
-Screenshots from one deployment of commit `main` are in [`docs/deployment.md`](docs/deployment.md):
+Screenshots from one real deployment (commit `683438f`) are in [`docs/deployment.md`](docs/deployment.md):
 the green CI run, the deploy run with its job summary, the live OpenAPI page, and the
-CloudWatch dashboard and alarms after a short load test.
+CloudWatch dashboard and alarms after a short load test, and the teardown. The live stack is not kept running between demos.
 
 ---
 
