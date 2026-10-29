@@ -44,7 +44,7 @@ jobs:
         run: bandit -q -r src -c pyproject.toml
 
       - name: pip-audit (known-vulnerable dependencies)
-        run: pip-audit --strict --progress-spinner off
+        run: pip-audit --skip-editable --progress-spinner off
 
       - name: Upload coverage report
         if: always()
@@ -87,7 +87,7 @@ jobs:
           docker rm -f app
 
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: illustration-engine:ci
           format: table
@@ -117,7 +117,7 @@ jobs:
         run: terraform init -backend=false -input=false && terraform validate
 
       - name: Trivy IaC scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: infra

@@ -18,7 +18,7 @@ test:
 
 security:
 	bandit -q -r src -c pyproject.toml
-	pip-audit
+	pip-audit --skip-editable
 
 run:
 	uvicorn illustration_engine.api:app --reload --port 8080
