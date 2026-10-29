@@ -15,3 +15,15 @@ variable "github_repository" {
   type        = string
   default     = "femi-alla/illustration-engine"
 }
+
+variable "github_owner_id" {
+  description = "Numeric id of the repository owner: gh api users/<owner> --jq .id"
+  type        = number
+  default     = 18646689
+}
+
+variable "github_repository_id" {
+  description = "Numeric id of the repository: gh api repos/<owner>/<name> --jq .id"
+  type        = number
+  default     = 1437750696
+}

@@ -33,7 +33,12 @@ data "aws_caller_identity" "current" {}
 locals {
   account_id   = data.aws_caller_identity.current.account_id
   state_bucket = "${var.project}-tfstate-${local.account_id}-${var.region}"
-  repo_subject = "repo:${var.github_repository}"
+  repo_owner   = split("/", var.github_repository)[0]
+  repo_name    = split("/", var.github_repository)[1]
+  # GitHub's OIDC subject embeds the immutable owner and repository ids
+  # ("repo:owner@123/name@456:..."), so a renamed or re-created repository can
+  # never satisfy this trust policy.
+  repo_subject = "repo:${local.repo_owner}@${var.github_owner_id}/${local.repo_name}@${var.github_repository_id}"
 }
 
 # ---------------------------------------------------------------------------
