@@ -94,6 +94,10 @@ the live stack through the same OIDC role, removing all 27 resources and leaving
 the bootstrap stack. Running cost of the live stack while it was up was about $1.50 per
 day.
 
+Note: this deployment ran the task on X86_64. The task definition has since moved to
+Graviton (ARM64) with the image built for `linux/arm64`; see the README trade-offs
+section.
+
 ![Destroy run](screenshots/destroy-run.png)
 
 ## Notes for anyone repeating this

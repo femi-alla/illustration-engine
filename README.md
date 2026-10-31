@@ -15,8 +15,8 @@ The point of the project is to show two things side by side:
 - **Insurance domain mechanics**, written as readable Python: premium loads, monthly
   expense charges, cost of insurance on the net amount at risk, fixed and indexed
   crediting with caps and floors, the death-benefit corridor, surrender charges and lapse.
-- **Production-grade delivery**: a container on ECS Fargate behind an application load
-  balancer, all defined in Terraform, deployed from GitHub Actions with OIDC (no stored
+- **Production-grade delivery**: a container on ECS Fargate (Graviton, ARM64) behind an
+  application load balancer, all defined in Terraform, deployed from GitHub Actions with OIDC (no stored
   cloud keys), with tests, static analysis, image and IaC scanning, CloudWatch dashboards,
   alarms and structured logs.
 
@@ -148,7 +148,7 @@ Two Terraform stacks, split by lifecycle:
 | Stack | Applied by | Contains |
 |---|---|---|
 | `infra/bootstrap` | A person, once | S3 state bucket (versioned, encrypted, native locking), ECR repository (immutable tags, scan on push, keep last 10), GitHub OIDC provider and the IAM deploy role with a service-scoped policy. |
-| `infra/live` | GitHub Actions on every push to `main` | VPC with two public subnets, security groups, ALB + target group with `/healthz` checks, ECS cluster (Container Insights) and Fargate service, task execution and task roles, CPU target-tracking autoscaling (1–3 tasks), deployment circuit breaker with rollback, CloudWatch log group, dashboard, four alarms and an SNS topic. |
+| `infra/live` | GitHub Actions on every push to `main` | VPC with two public subnets, security groups, ALB + target group with `/healthz` checks, ECS cluster (Container Insights) and Fargate service on Graviton (ARM64), task execution and task roles, CPU target-tracking autoscaling (1–3 tasks), deployment circuit breaker with rollback, CloudWatch log group, dashboard, four alarms and an SNS topic. |
 
 The deploy role's trust policy only accepts tokens whose subject carries this
 repository's immutable owner and repository ids (`repo:owner@id/name@id:...`, the form
@@ -168,8 +168,14 @@ These are documented in code comments and accepted in `.trivyignore` with reason
 - **Service-scoped rather than resource-scoped IAM** for the deploy role, so the stack
   can evolve without a policy change each time. IAM writes are limited to this project's
   role name prefix and S3 to the state bucket.
-- **Running cost** while deployed is about $1.50/day (ALB plus one 0.25 vCPU task). The
-  `Destroy` workflow tears the live stack down on demand.
+- **Graviton (ARM64) Fargate.** The task definition sets `cpu_architecture = "ARM64"`
+  and CI builds the image for `linux/arm64` on a native ARM runner. Fargate bills ARM64
+  about 20% below X86_64 for the same vCPU and memory, and nothing in a pure-Python
+  service depends on the architecture. The first deployment (documented below) ran on
+  X86_64; the switch is the kind of change the pipeline exists to make safe.
+- **Running cost** while deployed is about $1.50/day (ALB plus one 0.25 vCPU task,
+  of which the task is roughly $0.25 on Graviton). The `Destroy` workflow tears the
+  live stack down on demand.
 
 ---
 

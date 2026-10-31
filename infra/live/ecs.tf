@@ -53,9 +53,12 @@ resource "aws_ecs_task_definition" "app" {
   execution_role_arn       = aws_iam_role.execution.arn
   task_role_arn            = aws_iam_role.task.arn
 
+  # Graviton (ARM64) Fargate: about 20% cheaper per vCPU-hour and GB-hour than
+  # X86_64 for the same task size. The image is built for linux/arm64 in CI, so the
+  # two must change together.
   runtime_platform {
     operating_system_family = "LINUX"
-    cpu_architecture        = "X86_64"
+    cpu_architecture        = "ARM64"
   }
 
   container_definitions = jsonencode([
