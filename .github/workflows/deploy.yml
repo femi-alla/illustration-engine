@@ -87,7 +87,7 @@ jobs:
     # run without an AWS account, and the demo can be parked after teardown.
     if: github.event_name != 'pull_request' && vars.DEPLOY_ENABLED == 'true'
     needs: [ci]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm  # native arm64: builds the Graviton image without QEMU
     environment:
       name: production
       url: ${{ steps.outputs.outputs.service_url }}
@@ -109,6 +109,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/arm64
           push: true
           tags: ${{ steps.ecr.outputs.registry }}/illustration-engine:${{ github.sha }}
           build-args: |
