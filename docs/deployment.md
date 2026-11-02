@@ -96,7 +96,30 @@ day.
 
 Note: this deployment ran the task on X86_64. The task definition has since moved to
 Graviton (ARM64) with the image built for `linux/arm64`; see the README trade-offs
-section.
+section and the verification below.
+
+## 6. Graviton (ARM64) verification, 2026-10-30
+
+After merging the Graviton change (commit `f3265f5`), the Deploy workflow was run once
+more by hand (CI, image build on an ARM runner, `terraform apply`, live smoke test: all
+green), the running task was inspected with the AWS CLI, and the stack was destroyed
+again.
+
+```
+$ aws ecs describe-task-definition --task-definition illustration-engine:2     --query "taskDefinition.[revision,runtimePlatform.cpuArchitecture,runtimePlatform.operatingSystemFamily,cpu,memory]"
+2  ARM64  LINUX  256  512
+
+$ aws ecs describe-tasks --cluster illustration-engine --tasks <task>     --query "tasks[0].[lastStatus,healthStatus,attributes[?name=='ecs.cpu-architecture'].value|[0]]"
+RUNNING  HEALTHY  arm64
+
+$ curl -fsS http://<alb-dns>/version
+{"version":"0.1.0","git_sha":"f3265f5f3b0c9f5a6a646a23f2cf0674e3808e8d","built_at":""}
+```
+
+Terraform replaced the task definition (revision 1, X86_64, to revision 2, ARM64) and the
+service rolled to the new task through the deployment circuit breaker with no downtime
+on the load balancer health check. The image tag is the merge commit, built by
+`docker/build-push-action` with `platforms: linux/arm64` on `ubuntu-24.04-arm`.
 
 ![Destroy run](screenshots/destroy-run.png)
 
