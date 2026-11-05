@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Multi-stage build: dependencies are built once, the runtime image is slim and non-root.
 
-FROM python:3.12-slim AS builder
+FROM python:3.15-slim AS builder
 WORKDIR /build
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 COPY pyproject.toml README.md ./
@@ -13,7 +13,7 @@ RUN python -m venv /opt/venv \
     # libraries, which image scanners otherwise flag) from the virtualenv.
     && /opt/venv/bin/pip uninstall -y pip setuptools wheel
 
-FROM python:3.12-slim AS runtime
+FROM python:3.15-slim AS runtime
 ARG GIT_SHA=unknown
 ARG BUILD_TIME=unknown
 LABEL org.opencontainers.image.title="illustration-engine" \
